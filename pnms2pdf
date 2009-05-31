@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#
+# Author: Jonathan Cervidae <jonathan.cervidae@gmail.com>
+# PGP Fingerprint: 2DC0 0A44 123E 6CC2 EB55  EAFB B780 421F BF4C 4CB4
+# Last changed: $LastEdit: 2009-05-31 12:33:48 BST$
+# Last committed: $Format:%cd$
+# File revision: $Id$
+#
+# Ghostscript converts files much faster than it does STDIN pipes, so let's
+# feed it the data through a FIFO.
+#
+# Note: Insecure, run in a directory that is read/writable by you
+# only.
+#
+# Writes the result of the combined PDF pages to STDOUT so redirect that
+# somewhere :)
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see <http://www.gnu.org/licenses/>.
+
+usage() {
+    cat <<EOF >&2
+Usage: "${0}" <PAGE SIZE> <pnm file> [[pnm file], [pnm file]...]
+
+I make a multi-page PDF from the input pnm files and write the result to
+standard output (so you should redirect me with >"combined.pdf". I do this in
+an insecure fashion so you should only run me from within a directory that
+only you have read and write access to (on most systems, your home directory
+defaults to those permissions so don't worry about it too much if you don't
+understand).
+
+I only know the following page sizes (more will be added on request):
+
+A4, A5, Letter
+
+You can also specify your own special page format like this:
+
+12345.12:12345.12 where the sizes are in millimeters.
+
+This program was originally written to speed up conversion to PDF of a
+multi-file xsane project. You can use it in this fashion by changing to your
+multi-project directory and issuing the command:
+
+"${0}" A5 \`awk 'NR > 1' xsane-multipage-list\` >combined.pdf
+
+Where A5 was my page size, and the awk command in backticks generates a page
+list from the xsane project file by skipping the first line and supplying the
+rest as arguments.
+EOF
+    exit 1
+}
+
+math() {
+    echo "$@" | bc
+}
+
+test_for_requirements() {
+    # We could use AWK not bc which is arguably more portable...
+    required_commands="which tr rm mkfifo bc gs"
+    for required in $required_commands; do
+        which "${required}" &>/dev/null
+        if [ $? -ne 0 ]; then
+            cat <<EOF  >&2
+You do not appear to have the command ${required} installed. This program
+cannot work without it.
+EOF
+            exit 1
+        fi
+    done
+}
+
+get_paper_size() {
+    echo "$(echo "$1" | tr "[:upper:]" "[:lower:]")"
+}
+
+set_paper_size_options() {
+    case "$1" in
+        "a4" )
+        convert_command="pnmtops -width 9.84251969 -height 13.8976378"
+        gs_paper_size_options="-sPAPERSIZE=a4"
+        ;;
+        "a5" )
+        convert_command="pnmtops -width 5.84645669 -height 13.8976378"
+        gs_paper_size_options="-sPAPERSIZE=a5"
+        ;;
+        "letter" )
+        convert_command="pnmtops -width 8.5 -height 11"
+        gs_paper_size_options="-sPAPERSIZE=letter"
+        ;;
+        * )
+        # See if we are a custom paper size
+        expr "$1" : '^\([0-9]\{1,\}\(\.[0-9]\{1,\}\)\?:[0-9]\{1,\}\(\.[0-9]\{1,\}\)\?\)$' &>/dev/null
+        if [ $? -ne 0 ]; then
+            usage
+        fi
+        # Math constants
+        points_per_mm="2.83464567"
+
+        # We are a magic paper size
+        custom_width_mm="$(echo "$1" | cut -d: -f 1)"
+        custom_height_mm="$(echo "$1" | cut -d: -f 2)"
+        custom_width_points="$(math "${custom_width_mm} * ${points_per_mm}")"
+        custom_height_points="$(math "${custom_height_mm} * ${points_per_mm}")"
+
+        convert_command="pnmtops -width ${custom_width_mm=} -height ${custom_height_mm}"
+        gs_paper_size_options="-dDEVICEWIDTHPOINTS=${custom_width_points} -dDEVICEHEIGHTPOINTS=${custom_height_points}"
+
+    esac
+}
+
+if [ $# -lt 2 ]; then
+    usage
+fi
+
+test_for_requirements
+
+paper_size="$( get_paper_size "${1}")"
+shift
+
+set_paper_size_options "$paper_size"
+
+rm -f pdfpipe; mkfifo pdfpipe
+count=0
+page_files=""
+
+ghostscript_options="-dCompatibilityLevel=1.4 -dSAFER -dFIXEDMEDIA -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite ${gs_paper_size_options}"
+
+for f in "$@"; do
+    if [ ! -f "$f" ]; then
+        continue
+    fi
+    count="$(($count + 1))"
+    page_file="${count}.pdf"
+    page_files="${page_files} ${page_file} "
+    echo "Processing page ${count}: ${f}" >&2
+    # Don't -setpage with pnmtops
+    $convert_command <"$f" >pdfpipe | gs ${ghostscript_options} "-sOutputFile=${page_file}" -f pdfpipe
+done
+rm -f pdfpipe
+echo "Combining ${count} pages" >&2
+gs ${ghostscript_options} -sOutputFile=- $page_files
+rm -f ${page_files}

@@ -1,0 +1,22 @@
+Usage: "./pnms2pdf" <PAGE SIZE> <pnm file> [[pnm file], [pnm file]...]
+
+I make a multi-page PDF from the input pnm files and write the result to
+standard output (so you should redirect me with >"combined.pdf". I do this in
+an insecure fashion so you should only run me from within a directory that
+only you have read and write access to (on most systems, your home directory
+defaults to those permissions so don't worry about it too much if you don't
+understand).
+
+I only know the following page sizes (more will be added on request):
+
+A4, A5, Letter
+
+This program was originally written to speed up conversion to PDF of a
+multi-file xsane project. You can use it in this fashion by changing to your
+multi-project directory and issuing the command:
+
+"./pnms2pdf" A5 `awk 'NR > 1' xsane-multipage-list` >combined.pdf
+
+Where A5 was my page size, and the awk command in backticks generates a page
+list from the xsane project file by skipping the first line and supplying the
+rest as arguments.
