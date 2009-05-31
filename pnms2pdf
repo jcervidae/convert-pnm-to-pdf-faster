@@ -2,7 +2,7 @@
 #
 # Author: Jonathan Cervidae <jonathan.cervidae@gmail.com>
 # PGP Fingerprint: 2DC0 0A44 123E 6CC2 EB55  EAFB B780 421F BF4C 4CB4
-# Last changed: $LastEdit: 2009-05-31 12:33:48 BST$
+# Last changed: $LastEdit: 2009-05-31 14:22:20 BST$
 # Last committed: $Format:%cd$
 # File revision: $Id$
 #
@@ -86,15 +86,15 @@ get_paper_size() {
 set_paper_size_options() {
     case "$1" in
         "a4" )
-        convert_command="pnmtops -width 9.84251969 -height 13.8976378"
+        convert_command="pnmtops -dpi=300 -width 9.84251969 -height 13.8976378"
         gs_paper_size_options="-sPAPERSIZE=a4"
         ;;
         "a5" )
-        convert_command="pnmtops -width 5.84645669 -height 13.8976378"
+        convert_command="pnmtops -dpi=300 -width 5.84645669 -height 13.8976378"
         gs_paper_size_options="-sPAPERSIZE=a5"
         ;;
         "letter" )
-        convert_command="pnmtops -width 8.5 -height 11"
+        convert_command="pnmtops -dpi=300 -width 8.5 -height 11"
         gs_paper_size_options="-sPAPERSIZE=letter"
         ;;
         * )
@@ -105,15 +105,20 @@ set_paper_size_options() {
         fi
         # Math constants
         points_per_mm="2.83464567"
+        mm_per_inch="25.4"
+        dpi="300"
 
         # We are a magic paper size
         custom_width_mm="$(echo "$1" | cut -d: -f 1)"
         custom_height_mm="$(echo "$1" | cut -d: -f 2)"
+        custom_width_inches="$(math "scale=11;${custom_width_mm} / ${mm_per_inch}")"
+        custom_height_inches="$(math "scale=11;${custom_height_mm} / ${mm_per_inch}")"
         custom_width_points="$(math "${custom_width_mm} * ${points_per_mm}")"
         custom_height_points="$(math "${custom_height_mm} * ${points_per_mm}")"
-
-        convert_command="pnmtops -width ${custom_width_mm=} -height ${custom_height_mm}"
-        gs_paper_size_options="-dDEVICEWIDTHPOINTS=${custom_width_points} -dDEVICEHEIGHTPOINTS=${custom_height_points}"
+        custom_width_pixels="$(math "scale=0; (${custom_width_inches} * ${dpi})/1")"
+        custom_height_pixels="$(math "scale=0; (${custom_height_inches} * ${dpi})/1")"
+        convert_command="pnmtops -dpi=300 -width ${custom_width_mm=} -height ${custom_height_mm}"
+        gs_paper_size_options="-dDEVICEWIDTHPOINTS=${custom_width_points} -dDEVICEHEIGHTPOINTS=${custom_height_points} -dDEVICEWIDTHPIXELS=${custom_width_pixels} -dDEVICEHEIGHTPIXELS=${custom_height_pixels}"
 
     esac
 }
@@ -133,7 +138,7 @@ rm -f pdfpipe; mkfifo pdfpipe
 count=0
 page_files=""
 
-ghostscript_options="-dCompatibilityLevel=1.4 -dSAFER -dFIXEDMEDIA -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite ${gs_paper_size_options}"
+ghostscript_options="-dCompatibilityLevel=1.4 -dEPSFitPage -dSAFER -dFIXEDMEDIA -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite ${gs_paper_size_options}"
 
 for f in "$@"; do
     if [ ! -f "$f" ]; then
