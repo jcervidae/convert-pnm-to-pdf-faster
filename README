@@ -11,6 +11,10 @@ I only know the following page sizes (more will be added on request):
 
 A4, A5, Letter
 
+You can also specify your own special page format like this:
+
+12345.12:12345.12 where the sizes are in millimeters.
+
 This program was originally written to speed up conversion to PDF of a
 multi-file xsane project. You can use it in this fashion by changing to your
 multi-project directory and issuing the command:
